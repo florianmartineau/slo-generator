@@ -1,0 +1,19 @@
+{
+    "service_name": "prtg",
+    "feature_name": "test",
+    "slo_name": "lat",
+    "slo_description": "PRTG",
+    "slo_target": 0.9998,
+    "backend": {
+        "class": "Prtg",
+        "method": "latency",
+        "api_url": "https://prtg.adeo.com",
+        "api_passhash": "${prtg_passhash}",
+        "measurement": {
+            "threshold": 10,
+            "probe_id": 7642
+        }
+    },
+    "exporters": [
+    ]
+}
