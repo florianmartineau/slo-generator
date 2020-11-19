@@ -346,7 +346,7 @@ class PrtgClient:
         params_str = "&".join("%s=%s" % (k, v) for k, v in params.items()
                               if v is not None)
         url += f'?{params_str}'
-        LOGGER.warning(f'PRTG url: {url}')
+        LOGGER.debug(f'PRTG url: {url}')
         if method in ['put', 'post']:
             response = req(url, headers=headers, json=post_data)
         else:
