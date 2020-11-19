@@ -1,17 +1,17 @@
 {
     "service_name": "prtg",
     "feature_name": "test",
-    "slo_name": "lat",
+    "slo_name": "bandwidth",
     "slo_description": "PRTG",
     "slo_target": 0.9998,
     "backend": {
         "class": "Prtg",
-        "method": "latency",
+        "method": "bandwidth",
         "api_url": "https://prtg.adeo.com",
         "api_passhash": "${prtg_passhash}",
         "measurement": {
-            "threshold": 20,
-            "probe_id": 12873
+            "bandwidth_capacity": 20000,
+            "probe_id": 7613
         }
     },
     "exporters": [

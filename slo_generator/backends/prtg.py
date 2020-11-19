@@ -66,18 +66,74 @@ class PrtgBackend:
         probe_id = measurement['probe_id']
         threshold = measurement['threshold']
         good_below_threshold = measurement.get('good_below_threshold', True)
-        response = self.query(start=start, end=end, probe_id=probe_id)
+        response = self.query_historicdata(start=start, end=end, probe_id=probe_id)
         LOGGER.debug(f"Result valid: {pprint.pformat(response)}")
         return PrtgBackend.count_threshold(response,
                                                 threshold,
                                                 good_below_threshold)
+        
+    def availability(self, timestamp, window, slo_config):
+        """Compute SLI by counting the number of values below and above a
+        threshold.
 
-    def query(self,
+        Args:
+            timestamp (int): UNIX timestamp.
+            window (int): Window (in seconds).
+            slo_config (dict): SLO configuration.
+
+        Returns:
+            tuple: Good event count, Bad event count.
+        """
+        conf = slo_config['backend']
+        measurement = conf['measurement']
+        timestamp = time.time()
+        start = (timestamp - window)
+        start = datetime.fromtimestamp(start)
+        start = start.strftime('%Y-%m-%dT%H:%M:%S')
+        end = timestamp
+        end = datetime.fromtimestamp(end)
+        end = end.strftime('%Y-%m-%dT%H:%M:%S')
+        probe_id = measurement['probe_id']
+        response = self.query_historicdata(start=start, end=end, probe_id=probe_id)
+        LOGGER.debug(f"Result valid: {pprint.pformat(response)}")
+        return PrtgBackend.count_availability(response)
+    
+    def bandwidth(self, timestamp, window, slo_config):
+        """Compute SLI by counting the number of values below and above a
+        threshold.
+
+        Args:
+            timestamp (int): UNIX timestamp.
+            window (int): Window (in seconds).
+            slo_config (dict): SLO configuration.
+
+        Returns:
+            tuple: Good event count, Bad event count.
+        """
+        conf = slo_config['backend']
+        measurement = conf['measurement']
+        timestamp = time.time()
+        start = (timestamp - window)
+        start = datetime.fromtimestamp(start)
+        start = start.strftime('%Y-%m-%dT%H:%M:%S')
+        LOGGER.warning(start)
+        end = timestamp
+        end = datetime.fromtimestamp(end)
+        end = end.strftime('%Y-%m-%dT%H:%M:%S')
+        LOGGER.warning(end)
+        probe_id = measurement['probe_id']
+        bandwidth_capacity = measurement['bandwidth_capacity']
+        response = self.query_table(start=start, end=end, probe_id=probe_id)
+        LOGGER.debug(f"Result valid: {pprint.pformat(response)}")
+        return PrtgBackend.count_bandwidth(response, bandwidth_capacity)
+
+
+    def query_historicdata(self,
               start,
               end,
               probe_id=None,
               aggregation='SUM'):
-        """Query PRTG Metrics V2.
+        """Query historicdata.json PRTG Metrics V2.
 
         Args:
             start (int): Start timestamp (in milliseconds).
@@ -103,6 +159,37 @@ class PrtgBackend:
                                    version='v2',
                                    **params)
 
+    def query_table(self,
+              start,
+              end,
+              probe_id=None,
+              aggregation='SUM'):
+        """Query table.json PRTG Metrics V2.
+
+        Args:
+            start (int): Start timestamp (in milliseconds).
+            end (int): End timestamp (in milliseconds).
+            metric_selector (str): Metric selector.
+            entity_selector (str): Entity selector.
+            aggregation (str): Aggregation.
+
+        Returns:
+            dict: PRTG API response.
+        """
+        params = {
+            'sdate': start,
+            'edate': end,
+            'output': 'json',
+            'id': probe_id,
+            'username': 'slogenerator',
+            'content': 'channels',
+            'columns': 'name,lastvalue_'
+        }
+        return self.client.request('get',
+                                   'table.json',
+                                   version='v2',
+                                   **params)
+
     @staticmethod
     def count_threshold(response, threshold, good_below_threshold=True):
         """Create 2 buckets based on response and a value threshold, and return
@@ -122,12 +209,12 @@ class PrtgBackend:
             above = []
             
             points_below = [
-                point['Ping Time'] for point in datapoints
-                if point['Ping Time'] is not None and type(point['Ping Time']) is float and point['Ping Time'] < threshold
+                point['Avg. Round Trip Time (RTT)'] for point in datapoints
+                if point['Avg. Round Trip Time (RTT)'] is not None and type(point['Avg. Round Trip Time (RTT)']) is float and point['Avg. Round Trip Time (RTT)'] < threshold
             ]
             points_above = [
-                point['Ping Time'] for point in datapoints
-                if point['Ping Time'] is not None and type(point['Ping Time']) is float and point['Ping Time'] > threshold
+                point['Avg. Round Trip Time (RTT)'] for point in datapoints
+                if point['Avg. Round Trip Time (RTT)'] is not None and type(point['Avg. Round Trip Time (RTT)']) is float and point['Avg. Round Trip Time (RTT)'] > threshold
             ]
             below.extend(points_below)
             above.extend(points_above)
@@ -140,6 +227,55 @@ class PrtgBackend:
             LOGGER.debug(exception)
             return NO_DATA, NO_DATA  # no events in timeseries
 
+    @staticmethod
+    def count_availability(response):
+        """Count events in time series.
+
+        Args:
+            response (dict):  PRTG Metrics API response.
+            average (bool): Take average of result.
+
+        Returns:
+            int: Event count.
+        """
+        try:
+            values = []
+            datapoints = response['histdata']
+            for point in datapoints:
+                value = int(point['coverage'].strip(' %'))/100
+                if value is None:
+                    continue
+                values.append(value)
+            if not values:
+                raise IndexError
+            return sum(values) / len(values)
+        except (IndexError, AttributeError) as exception:
+            LOGGER.warning("Couldn't find any values in timeseries response")
+            LOGGER.debug(exception)
+            return 0  # no events in timeseries
+    
+    @staticmethod
+    def count_bandwidth(response, bandwidth_capacity):
+        """Count events in time series.
+
+        Args:
+            response (dict):  PRTG Metrics API response.
+            average (bool): Take average of result.
+
+        Returns:
+            int: Event count.
+        """
+        try:
+            datapoints = response['channels']
+            for point in datapoints:
+                if point['name'] == 'Traffic Total':
+                    value = int(point['lastvalue'].strip(' Mbit/s'))
+                    LOGGER.warning(value)
+            return value / bandwidth_capacity
+        except (IndexError, AttributeError) as exception:
+            LOGGER.warning("Couldn't find any values in timeseries response")
+            LOGGER.debug(exception)
+            return 0  # no events in timeseries
 
 def retry_http(response):
     """Retry on specific HTTP errors:
@@ -197,10 +333,8 @@ class PrtgClient:
         Returns:
             obj: API response.
         """
-        LOGGER.warning("Request")
         req = getattr(self.client, method)
         url = f'{self.url}/api/{endpoint}'
-        LOGGER.warning(url)
         params['passhash'] = self.token
         headers = {
             'Accept': 'application/json',
@@ -212,7 +346,7 @@ class PrtgClient:
         params_str = "&".join("%s=%s" % (k, v) for k, v in params.items()
                               if v is not None)
         url += f'?{params_str}'
-        LOGGER.debug(f'PRTG url: {url}')
+        LOGGER.warning(f'PRTG url: {url}')
         if method in ['put', 'post']:
             response = req(url, headers=headers, json=post_data)
         else:
