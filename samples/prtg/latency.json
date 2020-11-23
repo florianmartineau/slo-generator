@@ -10,7 +10,7 @@
         "api_url": "https://prtg.adeo.com",
         "api_passhash": "${prtg_passhash}",
         "measurement": {
-            "threshold": 20,
+            "threshold": 25,
             "probe_id": 12873
         }
     },
