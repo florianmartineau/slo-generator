@@ -186,7 +186,7 @@ class PrtgBackend:
             'columns': 'name,lastvalue_'
         }
         return self.client.request('get',
-                                   'table.json',
+                                   'historicdata.json',
                                    version='v2',
                                    **params)
 
