@@ -66,7 +66,7 @@ class PrtgBackend:
         probe_id = measurement['probe_id']
         threshold = measurement['threshold']
         good_below_threshold = measurement.get('good_below_threshold', True)
-        response = self.query_historicdata(start=start, end=end, probe_id=probe_id)
+        response = self.query_table(start=start, end=end, probe_id=probe_id)
         LOGGER.debug(f"Result valid: {pprint.pformat(response)}")
         return PrtgBackend.count_threshold(response,
                                                 threshold,
@@ -94,7 +94,8 @@ class PrtgBackend:
         end = datetime.fromtimestamp(end)
         end = end.strftime('%Y-%m-%dT%H:%M:%S')
         probe_id = measurement['probe_id']
-        response = self.query_historicdata(start=start, end=end, probe_id=probe_id)
+        #response = self.query_historicdata(start=start, end=end, probe_id=probe_id)
+        response = self.query_table(start=start, end=end, probe_id=probe_id)
         LOGGER.debug(f"Result valid: {pprint.pformat(response)}")
         return PrtgBackend.count_availability(response)
     
@@ -181,12 +182,12 @@ class PrtgBackend:
             'edate': end,
             'output': 'json',
             'id': probe_id,
-            'username': 'slogenerator',
+            'username': 'slodebug',
             'content': 'channels',
             'columns': 'name,lastvalue_'
         }
         return self.client.request('get',
-                                   'historicdata.json',
+                                   'table.json',
                                    version='v2',
                                    **params)
 
@@ -204,21 +205,16 @@ class PrtgBackend:
             tuple: Number of good events, Number of bad events.
         """
         try:
-            datapoints = response['histdata']
+            datapoints = response['channels']
             below = []
             above = []
             
-            points_below = [
-                point['Avg. Round Trip Time (RTT)'] for point in datapoints
-                if point['Avg. Round Trip Time (RTT)'] is not None and type(point['Avg. Round Trip Time (RTT)']) is float and point['Avg. Round Trip Time (RTT)'] < threshold
-            ]
-            points_above = [
-                point['Avg. Round Trip Time (RTT)'] for point in datapoints
-                if point['Avg. Round Trip Time (RTT)'] is not None and type(point['Avg. Round Trip Time (RTT)']) is float and point['Avg. Round Trip Time (RTT)'] > threshold
-            ]
-            below.extend(points_below)
-            above.extend(points_above)
-
+            for point in datapoints:
+                if point['name'] == 'Avg. Round Trip Time (RTT)':
+                    if point['lastvalue_raw'] is float and point['lastvalue_raw'] < threshold:
+                        below.append(int(point['lastvalue_raw']))
+                    else:
+                        above.append(int(point['lastvalue_raw']))
             if good_below_threshold:
                 return len(below), len(above)
             return len(above), len(below)
@@ -346,7 +342,7 @@ class PrtgClient:
         params_str = "&".join("%s=%s" % (k, v) for k, v in params.items()
                               if v is not None)
         url += f'?{params_str}'
-        LOGGER.debug(f'PRTG url: {url}')
+        LOGGER.warning(f'PRTG url: {url}')
         if method in ['put', 'post']:
             response = req(url, headers=headers, json=post_data)
         else:
