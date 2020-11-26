@@ -68,6 +68,7 @@ class PrtgBackend:
         good_below_threshold = measurement.get('good_below_threshold', True)
         response = self.query_table(start=start, end=end, probe_id=probe_id)
         LOGGER.debug(f"Result valid: {pprint.pformat(response)}")
+        time.sleep(3)
         return PrtgBackend.count_threshold(response,
                                                 threshold,
                                                 good_below_threshold)
@@ -126,6 +127,7 @@ class PrtgBackend:
         bandwidth_capacity = measurement['bandwidth_capacity']
         response = self.query_table(start=start, end=end, probe_id=probe_id)
         LOGGER.debug(f"Result valid: {pprint.pformat(response)}")
+        time.sleep(3)
         return PrtgBackend.count_bandwidth(response, bandwidth_capacity)
 
 
@@ -212,9 +214,9 @@ class PrtgBackend:
             for point in datapoints:
                 if point['name'] == 'Avg. Round Trip Time (RTT)':
                     if point['lastvalue_raw'] is float and point['lastvalue_raw'] < threshold:
-                        below.append(int(point['lastvalue_raw']))
-                    else:
                         above.append(int(point['lastvalue_raw']))
+                    else:
+                        below.append(int(point['lastvalue_raw']))
             if good_below_threshold:
                 return len(below), len(above)
             return len(above), len(below)
