@@ -90,31 +90,6 @@ class GraphiteBackend:
                                    **params)
 
     @staticmethod
-    def count(response):
-        """Count events in time series data.
-
-        Args:
-            response (dict): Graphite API response.
-
-        Returns:
-            int: Event count.
-        """
-        try:
-            datapoints = response['result'][0]['data']
-            values = []
-            for point in datapoints:
-                point_values = [
-                    point for point in point['values']
-                    if point is not None and point > 0
-                ]
-                values.extend(point_values)
-            return sum(values)
-        except (IndexError, KeyError) as exception:
-            LOGGER.warning("Couldn't find any values in timeseries response")
-            LOGGER.debug(exception)
-            return NO_DATA  # no events in timeseries
-
-    @staticmethod
     def count_threshold(response, threshold, good_below_threshold=True):
         """Create 2 buckets based on response and a value threshold, and return
         number of events contained in each bucket.
