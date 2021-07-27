@@ -59,8 +59,13 @@ class StackdriverExporter(MetricsExporter):
         labels = data['labels']
         series = monitoring_v3.types.TimeSeries()
         series.metric.type = data['name']
+        """
         for key, value in labels.items():
             series.metric.labels[key] = value
+        """
+        for key, value in labels.items():
+            if key == "product_id" or key == "module_id" or key == "slo_name":    
+                series.metric.labels[key] = value
         series.resource.type = 'global'
 
         # Create a new data point.
